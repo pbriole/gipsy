@@ -1,0 +1,43 @@
+#!/bin/bash
+
+#GIPSY processing of a set of files in Ultra mode (for CRL data)
+#P. Briole - 2012-04-14 - 2017-12-06
+#Version: 1.2
+
+if [ ! $# == 1 ]; then echo "Usage  : $0 repertoire"; echo "Exemple: $0 /a1/gpscalc/corinthe/201009/rinex/test/"; exit; fi                     # Exits if no argument
+
+# Processing parameters
+FO=/share/bin                                                                                                                                  # Folder with command files
+FI=/nshare/JPL_GPS_Products/Ultra/                                                                                                             # Folder with orbit files
+elm=15                                                                                                                                         # Minimum elevation processed
+ot=ultra                                                                                                                                       # Orbit and clock files (default flinnR)
+ar=1                                                                                                                                           # Iterations for amb resolution
+dr=300                                                                                                                                         # Date rate (seconds)
+
+echo Calcul GIPSY par lot - Version 1.0; echo "Sta  Date       Nom_Fich     Ant    X-ITRF2008  Y-ITRF2008  Z-ITRF2008  sig_X siy_Y sig_Z processed_on" # Processing start
+ddir=$1
+mkdir tmp 2> /dev/null; rm auto_gd2p.log 2> /dev/null; cd tmp; ls $ddir*.Z > zfiles
+for a in $(cat zfiles); do                                                                                                                     # Loop on available flies
+dat=`date +\%Y\%m\%d\ \%R`
+cp $a .; b=${a/$ddir/}; crz2rnx $b; c=${b/d.Z/o}
+d=`grep 'MARKER NAME' $c | cl c1`; e=`grep 'APPROX POS' $c | cl 'int(c1)/1000' 'int(c2)/1000' 'int(c3)/1000'`
+f=`grep 'TIME OF FIRST' $c | cl c1`; g=`grep 'TIME OF FIRST' $c | cl -%02d c2`; h=`grep 'TIME OF FIRST' $c | cl -%02d c3`
+m=`grep 'ANTENNA:' $c | cl c1`
+j=${f:0:4}-${g:0:2}-${h:0:2}; k=${d:0:4}${f:0:4}${g:0:2}${h:0:2}; l=$k'.gif'
+
+`gd2p.pl -i $c -n $d -p $e -orb_clk "$ot $FI$f" -r $dr -w_elmin $elm -type s -d $j -amb_res $ar 2> /dev/null` 2> /dev/null                     # GIPSY processing
+
+residuals.pl 2> /dev/null; `awk '{if($4==120) print $0}' residuals.txt | cl -%07.4f h1 -% c3 -%6.2f c7 -%5.2f c6 -%4.0f c5*10 > resi.txt`      # Extraction of the residuals
+
+cp tdp_final ../$k'.txt' 2> /dev/null; cp resi.txt ../$k'.res' 2> /dev/null                                                                    # Stores output files
+
+x=`grep 'STA X' tdp_final | cl -%.3f c3*1000`;   y=`grep 'STA Y' tdp_final | cl -%.3f c3*1000`;  z=`grep 'STA Z' tdp_final | cl -%.3f c3*1000`
+dx=`grep 'STA X' tdp_final | cl -%.3f c4*1000`; dy=`grep 'STA Y' tdp_final | cl -%.3f c4*1000`; dz=`grep 'STA Z' tdp_final | cl -%.3f c4*1000`
+echo $d $j $c $m $x $y $z $dx $dy $dz $dat; echo $d $j $c $m $x $y $z $dx $dy $dz $dat >>auto_gd2p.log                                          # Update file auto_gd2p.log
+grep 'WETZ' tdp_final | cl 'int(c3*1000)' | gnup -t "$d Tropo delay" -xl "Hours" -yl "Delay" -nk -gif $l
+cp $l auto_gd2p.log ../
+done
+cp auto_gd2p.log ../
+cd ..
+todos -o *.txt *.log
+\rm -r tmp
