@@ -24,7 +24,7 @@ The programme trcroor is available elsewhere, see http://pb.iterre.fr
 
 ### <a name="references"></a>References
 
-*  recplot.txt and skyplot.txt are modified versions of https://github.com/OSGeoLabBp/qcplot
+*  recplot.txt and skyplot.txt used in auto_gd2p_amb_new3 are modified versions of https://github.com/OSGeoLabBp/qcplot
 
 ### <a name="license"></a>License
 
