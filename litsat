@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# Merge GIPSY residual files
+# P. Briole - Version: 1.0 - 2016-11-27
+
+# Input paramtere $1 = station, $2 = date (yyyymmdd)
+if [ ! $# == 2 ]; then echo "Usage  : $0 code day(yyyymmdd)"; echo "Exemple: $0 ECPN 20110709"; exit; fi                     # Test input parameter
+
+ke=8                                                                                                                         # Shift to be applied between epochs
+
+kk=`date -d $2 +%s`; jj=86400; rr=+%Y%m%d; m0=$1$2.res; zz=GPS99                                                             # Initialisation
+km1=$(($kk-$jj)); km2=$(($km1-$jj)); kp1=$(($kk+$jj)); kp2=$(($kp1+$jj))
+m1=$1`date -d @"$km1" "$rr"`.res; m2=$1`date -d @"$km2" "$rr"`.res
+p1=$1`date -d @"$kp1" "$rr"`.res; p2=$1`date -d @"$kp2" "$rr"`.res
+
+rm 'combi'$2 2> /dev/null; touch 'combi'$2; sort $m0 -k2 > tmpsat
+
+awk '{print $2}' tmpsat | while read li; do 
+  if [ ! "$li" == "$zz" ]; then echo "Satellite" $li; zz=$li
+    sort $m0 -k1 | grep $li | cl c1 c3 c4 c5 > mm0
+    sort $m1 -k1 | grep $li | cl c1 c3 c4 c5 > mm1; sort $m2 -k1 | grep $li | cl c1 c2 c3 c4 c5 > mm2
+    sort $p1 -k1 | grep $li | cl c1 c3 c4 c5 > pp1; sort $p2 -k1 | grep $li | cl c1 c3 c4 c5 > pp2
+ 
+    join mm2 mm1 > a; join a mm0 > b; join b pp1 > c; join c pp2 > jj; rm a b c mm0 mm1 mm2 pp1 pp2
+
+    cat jj | cl -%03.0f c0    -% c2 c1  c3  c4  c5 > mmm2
+    cat jj | cl -%03.0f c0+1*$ke -% c1  c6  c7  c8 > mmm1
+    cat jj | cl -%03.0f c0+2*$ke -% c1  c9 c10 c11 > mmm0
+    cat jj | cl -%03.0f c0+3*$ke -% c1 c12 c13 c14 > ppp1
+    cat jj | cl -%03.0f c0+4*$ke -% c1 c15 c16 c17 > ppp2
+
+    join mmm2 mmm1 > aa; join aa mmm0 > bb; join bb ppp1 > cc; join cc ppp2 > dd; rm mmm0 mmm1 mmm2 ppp1 ppp2 jj aa bb cc
+
+    cat dd | cl c2 c11 -%7.5f 'abs(c3+c7-4*c11+c15+c19)/50' -%5.1f c12 c13 -%4.0f c6 c10 c14 c18 c22 | sed '/0.00000/!d' | sed 's/ 0.00000//' >> 'combi'$2
+  fi
+done
+rm tmpsat dd; cat 'combi'$2 | cl -do ";" c1 c2 -%05.1f c3 c4 -%4.0f c5 c6 c7 c8 c9 > 'combi'$2'.csv'                       # Make .csv file
