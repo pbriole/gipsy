@@ -22,7 +22,7 @@ The programme trcroor is available elsewhere, see http://pb.iterre.fr
 
 * Pierre Briole (briole@ens.fr)
 
-### <a name"references"></a>References
+### <a name="references"></a>References
 
 *  recplot.txt and skyplot.txt are modified versions of https://github.com/OSGeoLabBp/qcplot
 
