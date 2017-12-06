@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# Checks the existence of the flinnR data for a given year
+# Downloads (updates) data from flinnR JPL repository
+# Selection between Final (10-14 days), Rapid (1 day), Ultra (2 hours)
+# Optional parameters doy_start doy_end
+# P. Briole - v1.1 - 2017-12-04 - 2017-12-06
+
+if [ ! $# -ge 2 ]; then echo "Usage: $0 year type [doy doy]"
+echo "Exemple: $0 2015 type [deb fin]"; echo "Exemple: $0 2015 Final 300 330"; exit; fi              # Test input parameter
+
+bb=/nshare/JPL_GPS_Products/$2/                                                                      # Path of the folder
+cc=ftp://anonymous:briole@sideshow.jpl.nasa.gov/pub/JPL_GPS_Products/$2/$1                           # Gipsy ftp folder for the given year
+
+c1=.ant.gz; c2=.eo.gz; c3=.frame.gz; c4=_hr.tdp.gz; c5=.pos.gz; c6=.shad.gz; c7=.tdp.gz; c8=.wlpb.gz
+e=`date -d $1-12-31 +\%j`; s=`date -d $10101 +\%s`; u=1
+cd $bb$1                                                                                             # Go th the specific folder
+
+if [ -n "$4" ]; then u=$3; e=$4; fi                                                                  # Selects the period
+while [ "$u" -le "$e" ]; do jj=$(($s+86400*($u-1))); g=`date --date=@$jj +\%Y"-"\%m"-"\%d`
+  if [ ! -f $bb$1/$g$c1 ]; then wget -c -t 3 -T 10 $cc"/"$g$c1; fi                                   # Get "ant" file 
+  if [ ! -f $bb$1/$g$c2 ]; then wget -c -t 3 -T 10 $cc"/"$g$c2; fi                                   # Get "eo" file (IERS Earth orientation)
+  if [ ! -f $bb$1/$g$c3 ]; then wget -c -t 3 -T 10 $cc"/"$g$c3; fi                                   # Get "Frame" file
+if [ ! "$2" == "Ultra" ]; then
+  if [ ! -f $bb$1/$g$c4 ]; then wget -c -t 3 -T 10 $cc"/"$g$c4; fi                                   # Get hr_tdp" file
+fi
+  if [ ! -f $bb$1/$g$c5 ]; then wget -c -t 3 -T 10 $cc"/"$g$c5; fi                                   # Get "pos" file
+  if [ ! -f $bb$1/$g$c6 ]; then wget -c -t 3 -T 10 $cc"/"$g$c6; fi                                   # Get "shad" file
+  if [ ! -f $bb$1/$g$c7 ]; then wget -c -t 3 -T 10 $cc"/"$g$c7; fi                                   # Get "tdp" file
+  if [ ! -f $bb$1/$g$c8 ]; then wget -c -t 3 -T 10 $cc"/"$g$c8; fi                                   # Get "wlpb" file
+  u=$(($u+1))
+done
+echo "Done"; exit

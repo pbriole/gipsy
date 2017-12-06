@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# Process with GIPSY 6.4 a set of compressed RINEX files
+# P. Briole    - 2012-04-14 (initial version 1.0)
+# Version: 2.1 - 2017-11-26 - 2017-12-06
+# Requires files skyplot.plt, recplot.plt and tropolot.plt to be located in the folder /share/bin
+
+# Input paramtere $1 = folder with data
+if [ ! $# == 1 ]; then echo "Usage  : $0 repertoire"; echo "Exemple: $0 /a1/gpscalc/corinthe/201009/rinex/test/"; exit; fi                     # Test input parameter
+if [ ! -d $1 ]; then echo "Data folder does not exist"; exit; fi                                                                               # Test existence data folder
+
+if [ "$1" == "-h" ]; then
+echo "Process with GIPSY 6.4 a set of compressed RINEX files"; echo "Edit $0 file to change processing parameters"; exit; fi                   # Short help
+
+if [ ! ${1:(-1)} == "/" ]; then ddir=$1"/"; else ddir=$1; fi                                                                                   # Add / if needed
+
+# Processing parameters
+FO=/share/bin                                                                                                                                  # Folder with command files
+FI=/nshare/JPL_GPS_Products/Final/                                                                                                             # Folder with orbit files
+elm=15                                                                                                                                         # Minimum elevation processed
+ot=flinnR                                                                                                                                      # Orbit and clock files (default flinnR)
+ar=1                                                                                                                                           # Iterations for amb resolution
+dr=300                                                                                                                                         # Date rate (seconds)
+
+echo GIPSY processing of a set of files in crz format - Version 2.0                                                                            # Start processing
+echo "Sta  Date       Nom_Fich     Ant    X-ITRF2008  Y-ITRF2008  Z-ITRF2008  sig_X siy_Y sig_Z processed_on   in(s)"
+mkdir tmp 2> /dev/null; rm auto_gd2p.log 2> /dev/null; cd tmp; ls $ddir*.Z > zfiles                                                            # Prepares working folder
+
+for a in $(cat zfiles); do dat=`date +\%Y\%m\%d\ \%R`                                                                                          # Loop on available rinex files
+cp $a .; b=${a/$ddir/}; c=${b/d.Z/o}; crz2rnx $b; zz=`date +\%s`                                                                               # Fetch rinex file
+
+d=`grep 'MARKER NAME' $c | cl c1`; e=`grep 'APPROX POS' $c | cl 'int(c1)/1000' 'int(c2)/1000' 'int(c3)/1000'`                                  # Code and coordinates
+f=`grep 'TIME OF FIRST' $c | cl c1`; g=`grep 'TIME OF FIRST' $c | cl -%02d c2`; h=`grep 'TIME OF FIRST' $c | cl -%02d c3`                      # Date
+m=`grep 'ANTENNA:' $c | cl c1`                                                                                                                 # Antenna height 
+j=${f:0:4}-${g:0:2}-${h:0:2}; k=${d:0:4}${f:0:4}${g:0:2}${h:0:2}
+
+
+if [ ! -f ../$k'.txt' ]; then echo " to be processed"
+
+
+if [ ! -f $FI${f:0:4}/$j".tdp.gz" ]; then goa_prod_ftp.pl -d $j -hr -s $ot > /dev/null                                                         # Downloads orbits if needed
+mv $j* $FI$f; fi                                                                                                                               # Moves orbits to appropriate folder 
+`gd2p.pl -i $c -n $d -p $e -orb_clk "$ot $FI$f" -r $dr -w_elmin $elm -type s -d $j -amb_res $ar 2> /dev/null` 2> /dev/null                     # GIPSY processing !
+
+if [ -f "tdp_final" ]; then                                                                                                                    # Proceeds if tdp_final exists
+
+residuals.pl 2> /dev/null; `awk '{if($4==120) print $0}' residuals.txt | cl -%07.4f h1 -% c3 -%6.2f c7 -%5.2f c6 -%4.0f c5*10 > resi.txt`      # Extraction of the residuals
+cp tdp_final ../$k'.txt' 2> /dev/null; cp resi.txt ../$k'.res' 2> /dev/null                                                                    # Stores output files
+
+sed -e s%ssss%"$d"% -e s%session%"0"% -e s%ddd%"${h:0:2}"% -e s%mmm%"${g:0:2}"% -e s%yyyy%"${f:0:4}"% $FO/skyplot.plt > sk.plt                 # Customs skyplot 
+sed -e s%ssss%"$d"% -e s%session%"0"% -e s%ddd%"${h:0:2}"% -e s%mmm%"${g:0:2}"% -e s%yyyy%"${f:0:4}"% $FO/recplot.plt > rr.plt                 # Customs residual=f(time)
+sed -e s%ssss%"$d"% -e s%session%"0"% -e s%ddd%"${h:0:2}"% -e s%mmm%"${g:0:2}"% -e s%yyyy%"${f:0:4}"% $FO/troplot.plt > tp.plt                 # Customs tropo delay adjustement
+`awk '{print $0}' resi.txt | cl c3 c4 c5 > azelre.txt`; cat resi.txt | cl 1 3 5 > rr.txt                                                       # Data files for above plots
+
+x=`grep 'STA X' tdp_final | cl -%.3f c3*1000`;   y=`grep 'STA Y' tdp_final | cl -%.3f c3*1000`;  z=`grep 'STA Z' tdp_final | cl -%.3f c3*1000` # Computed coordinates
+dx=`grep 'STA X' tdp_final | cl -%.3f c4*1000`; dy=`grep 'STA Y' tdp_final | cl -%.3f c4*1000`; dz=`grep 'STA Z' tdp_final | cl -%.3f c4*1000` # Computed sigmas
+echo $d $j $c $m $x $y $z $dx $dy $dz $dat $((`date +%s`-$zz)); echo $d $j $c $m $x $y $z $dx $dy $dz $dat >>auto_gd2p.log                     # Displays and stores results
+
+gnuplot sk.plt 2> /dev/null; cp skyplot.png ../$k'.png' 2> /dev/null                                                                           # Plots skyplot
+gnuplot rr.plt 2> /dev/null; cp recplot.png ../$k'rec.png' 2> /dev/null                                                                        # Plots residual=f(time)
+grep 'WETZ' tdp_final | cl -%.4f h1 -%.1f c3*1000 c4*1000 > tp.txt; gnuplot tp.plt 2> /dev/null; cp troplot.png ../$k'tro.png' 2> /dev/null    # Plots tropo delay adjustement
+
+else echo "Failed: tdp_final file does not exist for file $b"; echo "Failed: tdp_final file does not exist for file $b" >>auto_gd2p.log; fi    # Alert if tdp_final does not exist
+
+rm $b $c *S residuals.txt tdp_final 2> /dev/null                                                                                               # Cleans before next iteration 
+else echo $k" already processed"
+fi
+
+done                                                                                                                                           # End of loop
+cp auto_gd2p.log ../ 2> /dev/null; cd ..
+todos -o *.txt *.log 2> /dev/null                                                                                                              # Adds CR for Windows users
+\rm -r tmp; echo "Done"
